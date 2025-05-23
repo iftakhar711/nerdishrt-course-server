@@ -154,7 +154,7 @@ async function run() {
     });
 
     // GET endpoint for fetching all courses
-    app.get("api/courses", async (req, res) => {
+    app.get("/courses", async (req, res) => {
       try {
         const courses = await coursesCollection.find({}).toArray();
         res.status(200).json({
