@@ -2,6 +2,7 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 require("dotenv").config();
+
 const port = process.env.PORT || 5000;
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
@@ -24,40 +25,220 @@ async function run() {
     await client.connect();
     const userDatabase = client.db("security-course-user");
     const courseDatabase = client.db("coursesDB");
+    const blogDatabase = client.db("blogDB");
 
     const usersCollection = userDatabase.collection("user");
     const coursesCollection = courseDatabase.collection("courses");
+    const blogCollection = blogDatabase.collection("blog");
 
     // COURSES ENDPOINTS
 
     // GET - Get all courses (basic info only)
-    app.get("/courses", async (req, res) => {
+    // app.get("/courses", async (req, res) => {
+    //   try {
+    //     // Projection to return only essential fields
+    //     const projection = {
+    //       slug: 1,
+    //       title: 1,
+
+    //       fee: 1,
+    //       duration: 1,
+    //       session: 1,
+    //       minimum_age: 1,
+    //       _id: 0,
+    //     };
+
+    //     const courses = await coursesCollection
+    //       .find({}, { projection })
+    //       .toArray();
+
+    //     res.json({
+    //       success: true,
+    //       count: courses.length,
+    //       courses,
+    //     });
+    //   } catch (error) {
+    //     console.error("Error fetching courses:", error);
+    //     res.status(500).json({
+    //       success: false,
+    //       message: "Failed to fetch courses",
+    //     });
+    //   }
+    // });
+    app.post("/courses", async (req, res) => {
       try {
-        // Projection to return only essential fields
-        const projection = {
-          slug: 1,
-          title: 1,
-          fee: 1,
-          duration: 1,
-          session: 1,
-          minimum_age: 1,
-          _id: 0,
+        const {
+          title,
+          slug,
+          icon,
+          bgColorClass,
+          fee,
+          duration,
+          session,
+          category,
+          minimum_age,
+          assessment,
+          resultCertificate,
+          earnings,
+          siaLicenceFee,
+          additionalCharges,
+          entryRequirement,
+          teachingMethod,
+          content,
+          faq,
+          isFeatured,
+          overview,
+          imageUrl, // Added imageUrl from Cloudinary
+        } = req.body;
+
+        // Basic validation
+        if (
+          !title ||
+          !slug ||
+          fee === undefined ||
+          isNaN(fee) ||
+          !duration ||
+          !session ||
+          minimum_age === undefined ||
+          isNaN(minimum_age) ||
+          !category ||
+          !bgColorClass ||
+          !overview
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: "Missing or invalid required fields.",
+          });
+        }
+
+        const courseData = {
+          title,
+          slug,
+          icon,
+          bgColorClass,
+          fee: parseFloat(fee),
+          duration,
+          session,
+          category,
+          minimum_age: parseInt(minimum_age),
+          assessment: assessment || "",
+          resultCertificate: resultCertificate || "",
+          earnings: earnings || "",
+          siaLicenceFee: siaLicenceFee || "",
+          additionalCharges: additionalCharges || "",
+          entryRequirement: entryRequirement || "",
+          teachingMethod: teachingMethod || "",
+          overview, // Added overview field
+          content: content || [],
+          faq: faq || [],
+          isFeatured: isFeatured || false,
+          imageUrl: imageUrl || "", // Store the Cloudinary image URL
+          createdAt: new Date(),
         };
 
-        const courses = await coursesCollection
-          .find({}, { projection })
-          .toArray();
+        const result = await coursesCollection.insertOne(courseData);
 
-        res.json({
+        res.status(201).json({
           success: true,
-          count: courses.length,
+          message: "Course created successfully",
+          insertedId: result.insertedId,
+        });
+      } catch (error) {
+        console.error("Error creating course:", error);
+        res.status(500).json({
+          success: false,
+          message: "Failed to create course",
+          error: error.message,
+        });
+      }
+    });
+
+    // GET endpoint for fetching all courses
+    app.get("/courses", async (req, res) => {
+      try {
+        const courses = await coursesCollection.find({}).toArray();
+        res.status(200).json({
+          success: true,
           courses,
+          message: "Courses fetched successfully",
         });
       } catch (error) {
         console.error("Error fetching courses:", error);
         res.status(500).json({
           success: false,
           message: "Failed to fetch courses",
+          error: error.message,
+        });
+      }
+    });
+    // PUT - Update a course by slug
+    app.put("/courses/:slug", async (req, res) => {
+      try {
+        const slug = req.params.slug;
+        const updateData = req.body;
+
+        if (!slug) {
+          return res.status(400).json({
+            success: false,
+            message: "Course slug is required",
+          });
+        }
+
+        const result = await coursesCollection.updateOne(
+          { slug: slug },
+          { $set: updateData }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({
+            success: false,
+            message: "Course not found",
+          });
+        }
+
+        res.json({
+          success: true,
+          message: "Course updated successfully",
+        });
+      } catch (error) {
+        console.error("Error updating course:", error);
+        res.status(500).json({
+          success: false,
+          message: "Failed to update course",
+        });
+      }
+    });
+
+    // DELETE - Delete a course by slug
+    app.delete("/courses/:slug", async (req, res) => {
+      try {
+        const slug = req.params.slug;
+
+        if (!slug) {
+          return res.status(400).json({
+            success: false,
+            message: "Course slug is required",
+          });
+        }
+
+        const result = await coursesCollection.deleteOne({ slug });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).json({
+            success: false,
+            message: "Course not found",
+          });
+        }
+
+        res.json({
+          success: true,
+          message: "Course deleted successfully",
+        });
+      } catch (error) {
+        console.error("Error deleting course:", error);
+        res.status(500).json({
+          success: false,
+          message: "Failed to delete course",
         });
       }
     });
@@ -88,18 +269,20 @@ async function run() {
           slug: course.slug,
           title: course.title,
           fee: course.fee || "Not specified",
+          icon: course.icon,
           duration: course.duration,
           session: course.session,
           assessment: course.assessment,
           result_certificate: course.result_certificate,
           minimum_age: course.minimum_age,
           earnings: course.earnings || "Not specified",
-          sia_licence_fee: course.sia_licence_fee || "Not applicable",
-          additional_charges: course.additional_charges || "None",
+          siaLicenceFee: course.siaLicenceFee || "Not specified",
+          additionalCharges: course.additionalCharges || "None",
           faq: course.faq || [],
-          entry_requirement: course.entry_requirement || "None specified",
+          entryRequirement: course.entryRequirement || "None specified",
           teaching_method: course.teaching_method,
           content: course.content || [],
+          imageUrl: course.imageUrl,
         };
 
         res.json({
@@ -485,6 +668,309 @@ async function run() {
         }
       }
     );
+
+    //BLOG SECTION START
+
+    app.post("/blogs", async (req, res) => {
+      try {
+        const {
+          title,
+          slug,
+          metaDescription,
+          content,
+          category,
+          tags,
+          author,
+        } = req.body;
+
+        // Validate required fields
+        if (!title || !slug || !content || !category || !tags || !author) {
+          return res.status(400).json({ error: "All fields are required" });
+        }
+
+        const publishDate = new Date();
+        const result = await blogCollection.insertOne({
+          title,
+          slug,
+          metaDescription,
+          content,
+          category,
+          tags: Array.isArray(tags)
+            ? tags
+            : tags.split(",").map((tag) => tag.trim()),
+          publishDate,
+          author,
+          views: 0,
+          updatedAt: null,
+        });
+
+        res.status(201).json(result);
+      } catch (error) {
+        console.error("Error creating blog:", error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Update blog post
+    app.put("/blogs/:slug", async (req, res) => {
+      try {
+        const { slug } = req.params;
+        const { title, metaDescription, content, category, tags, author } =
+          req.body;
+
+        // Validate required fields
+        if (!title || !content || !category || !tags || !author) {
+          return res
+            .status(400)
+            .json({ error: "All fields except slug are required" });
+        }
+
+        const result = await blogCollection.updateOne(
+          { slug },
+          {
+            $set: {
+              title,
+              metaDescription,
+              content,
+              category,
+              tags: Array.isArray(tags)
+                ? tags
+                : tags.split(",").map((tag) => tag.trim()),
+              author,
+              updatedAt: new Date(),
+            },
+          }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ error: "Blog post not found" });
+        }
+
+        res.json(result);
+      } catch (error) {
+        console.error("Error updating blog:", error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Get all blogs
+    app.get("/blogs", async (req, res) => {
+      try {
+        const blogs = await blogCollection
+          .find()
+          .sort({ publishDate: -1 })
+          .toArray();
+        res.json(blogs);
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Get single blog by slug
+    app.get("/blogs/:slug", async (req, res) => {
+      try {
+        const blog = await blogCollection.findOne({ slug: req.params.slug });
+        if (!blog) return res.status(404).json({ message: "Blog not found" });
+
+        // Increment views
+        await blogCollection.updateOne(
+          { slug: req.params.slug },
+          { $inc: { views: 1 } }
+        );
+
+        res.json(blog);
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Update blog
+    // app.put("/blogs/:slug", async (req, res) => {
+    //   try {
+    //     const { title, metaDescription, content, category, tags } = req.body;
+
+    //     const result = await blogCollection.updateOne(
+    //       { slug: req.params.slug },
+    //       {
+    //         $set: {
+    //           title,
+    //           metaDescription,
+    //           content,
+    //           category,
+    //           tags: tags.split(",").map((tag) => tag.trim()),
+    //           updatedAt: new Date(),
+    //         },
+    //       }
+    //     );
+
+    //     if (result.matchedCount === 0) {
+    //       return res.status(404).json({ message: "Blog not found" });
+    //     }
+
+    //     res.json(result);
+    //   } catch (error) {
+    //     res.status(500).json({ error: error.message });
+    //   }
+    // });
+
+    // Delete blog
+    app.delete("/blogs/:slug", async (req, res) => {
+      try {
+        const result = await blogCollection.deleteOne({
+          slug: req.params.slug,
+        });
+        if (result.deletedCount === 0) {
+          return res.status(404).json({ message: "Blog not found" });
+        }
+        res.json({ message: "Blog deleted successfully" });
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    //BLOG SECTION END
+
+    // app.post("/courses", async (req, res) => {
+    //   try {
+    //     const {
+    //       title,
+    //       slug,
+    //       fee,
+    //       duration,
+    //       session,
+    //       minimum_age,
+    //       assessment,
+    //       resultCertificate,
+    //       earnings,
+    //       siaLicenceFee,
+    //       additionalCharges,
+    //       entryRequirement,
+    //       teachingMethod,
+    //       content,
+    //       faq,
+    //     } = req.body;
+
+    //     // Optional: Basic validation
+    //     if (!title || !slug || !fee || !duration || !session || !minimum_age) {
+    //       return res.status(400).json({
+    //         success: false,
+    //         message: "Missing required fields",
+    //       });
+    //     }
+
+    //     const courseData = {
+    //       title,
+    //       slug,
+    //       fee,
+    //       duration,
+    //       session,
+    //       minimum_age,
+    //       assessment,
+    //       resultCertificate,
+    //       earnings,
+    //       siaLicenceFee,
+    //       additionalCharges,
+    //       entryRequirement,
+    //       teachingMethod,
+    //       content,
+    //       faq,
+    //       createdAt: new Date(),
+    //     };
+
+    //     const result = await coursesCollection.insertOne(courseData);
+
+    //     res.status(201).json({
+    //       success: true,
+    //       message: "Course created successfully",
+    //       insertedId: result.insertedId,
+    //     });
+    //   } catch (error) {
+    //     console.error("Error creating course:", error);
+    //     res.status(500).json({
+    //       success: false,
+    //       message: "Failed to create course",
+    //     });
+    //   }
+    // });
+
+    // app.post("/courses", async (req, res) => {
+    //   try {
+    //     const {
+    //       title,
+    //       slug,
+    //       icon,
+    //       bgColorClass,
+    //       fee,
+    //       duration,
+    //       session,
+    //       category,
+    //       minimum_age,
+    //       assessment,
+    //       resultCertificate,
+    //       earnings,
+    //       siaLicenceFee,
+    //       additionalCharges,
+    //       entryRequirement,
+    //       teachingMethod,
+    //       content,
+    //       faq,
+    //     } = req.body;
+
+    //     // Optional: Basic validation
+    //     if (
+    //       !title ||
+    //       !slug ||
+    //       !fee ||
+    //       !duration ||
+    //       !session ||
+    //       !minimum_age ||
+    //       !category ||
+    //       !bgColorClass
+    //     ) {
+    //       return res.status(400).json({
+    //         success: false,
+    //         message: "Missing required fields",
+    //       });
+    //     }
+
+    //     const courseData = {
+    //       title,
+    //       slug,
+    //       icon,
+    //       bgColorClass,
+    //       fee,
+    //       duration,
+    //       session,
+    //       category,
+    //       minimum_age,
+    //       assessment,
+    //       resultCertificate,
+    //       earnings,
+    //       siaLicenceFee,
+    //       additionalCharges,
+    //       entryRequirement,
+    //       teachingMethod,
+    //       content,
+    //       faq,
+    //       createdAt: new Date(),
+    //     };
+
+    //     const result = await coursesCollection.insertOne(courseData);
+
+    //     res.status(201).json({
+    //       success: true,
+    //       message: "Course created successfully",
+    //       insertedId: result.insertedId,
+    //     });
+    //   } catch (error) {
+    //     console.error("Error creating course:", error);
+    //     res.status(500).json({
+    //       success: false,
+    //       message: "Failed to create course",
+    //       error: error.message,
+    //     });
+    //   }
+    // });
 
     console.log("Successfully connected to MongoDB!");
   } finally {
