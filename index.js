@@ -70,6 +70,7 @@ async function run() {
         const {
           title,
           slug,
+          short_description,
           icon,
           bgColorClass,
           fee,
@@ -115,6 +116,7 @@ async function run() {
           title,
           slug,
           icon,
+          short_description,
           bgColorClass,
           fee: parseFloat(fee),
           duration,
@@ -268,9 +270,12 @@ async function run() {
         const response = {
           slug: course.slug,
           title: course.title,
+          short_description: course.short_description,
           fee: course.fee || "Not specified",
           icon: course.icon,
           duration: course.duration,
+          session: course.session,
+          category: course.category,
           session: course.session,
           assessment: course.assessment,
           result_certificate: course.result_certificate,
@@ -280,7 +285,8 @@ async function run() {
           additionalCharges: course.additionalCharges || "None",
           faq: course.faq || [],
           entryRequirement: course.entryRequirement || "None specified",
-          teaching_method: course.teaching_method,
+          teachingMethod: course.teachingMethod || "Not specified",
+          overview: course.overview,
           content: course.content || [],
           imageUrl: course.imageUrl,
         };
