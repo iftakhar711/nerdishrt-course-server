@@ -30,41 +30,190 @@ async function run() {
     const usersCollection = userDatabase.collection("user");
     const coursesCollection = courseDatabase.collection("courses");
     const blogCollection = blogDatabase.collection("blog");
+    const testimonialsCollection = client
+      .db("security-course-user")
+      .collection("testimonials");
+    // TESTIMONIALS ENDPOINTS
+
+    // Create a testimonial collection in your database
+
+    // Submit a new testimonial (public)
+    app.post("/testimonials", async (req, res) => {
+      try {
+        const { name, review, stars, city } = req.body;
+
+        // Validation
+        if (!name || !review || !stars || !city) {
+          return res.status(400).json({
+            success: false,
+            message: "All fields are required",
+          });
+        }
+
+        if (stars < 1 || stars > 5) {
+          return res.status(400).json({
+            success: false,
+            message: "Rating must be between 1 and 5 stars",
+          });
+        }
+
+        const testimonial = {
+          name,
+          review,
+          stars: parseInt(stars),
+          city,
+          approved: false, // New testimonials need admin approval
+          date: new Date(),
+          createdAt: new Date(),
+        };
+
+        const result = await testimonialsCollection.insertOne(testimonial);
+
+        res.status(201).json({
+          success: true,
+          message:
+            "Thank you for your testimonial! It will be visible after admin approval.",
+          testimonial: {
+            _id: result.insertedId,
+            ...testimonial,
+          },
+        });
+      } catch (error) {
+        console.error("Error submitting testimonial:", error);
+        res.status(500).json({
+          success: false,
+          message: "Failed to submit testimonial",
+          error: error.message,
+        });
+      }
+    });
+
+    // Get all approved testimonials (public)
+    app.get("/testimonials", async (req, res) => {
+      try {
+        const testimonials = await testimonialsCollection
+          .find({ approved: true })
+          .sort({ date: -1 })
+          .toArray();
+
+        res.json({
+          success: true,
+          testimonials,
+        });
+      } catch (error) {
+        console.error("Error fetching testimonials:", error);
+        res.status(500).json({
+          success: false,
+          message: "Failed to fetch testimonials",
+          error: error.message,
+        });
+      }
+    });
+
+    // ADMIN ROUTES (should be protected in production)
+
+    // Get all testimonials including unapproved (admin)
+    app.get("/admin/testimonials", async (req, res) => {
+      try {
+        // In production, add JWT verification here
+        const testimonials = await testimonialsCollection
+          .find()
+          .sort({ createdAt: -1 })
+          .toArray();
+
+        res.json({
+          success: true,
+          testimonials,
+        });
+      } catch (error) {
+        console.error("Error fetching testimonials:", error);
+        res.status(500).json({
+          success: false,
+          message: "Failed to fetch testimonials",
+          error: error.message,
+        });
+      }
+    });
+
+    // Approve a testimonial (admin)
+    app.patch("/admin/testimonials/:id/approve", async (req, res) => {
+      try {
+        // In production, add JWT verification here
+        const testimonialId = req.params.id;
+
+        if (!ObjectId.isValid(testimonialId)) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid testimonial ID",
+          });
+        }
+
+        const result = await testimonialsCollection.updateOne(
+          { _id: new ObjectId(testimonialId) },
+          { $set: { approved: true, approvedAt: new Date() } }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({
+            success: false,
+            message: "Testimonial not found",
+          });
+        }
+
+        res.json({
+          success: true,
+          message: "Testimonial approved successfully",
+        });
+      } catch (error) {
+        console.error("Error approving testimonial:", error);
+        res.status(500).json({
+          success: false,
+          message: "Failed to approve testimonial",
+          error: error.message,
+        });
+      }
+    });
+
+    // Delete a testimonial (admin)
+    app.delete("/admin/testimonials/:id", async (req, res) => {
+      try {
+        // In production, add JWT verification here
+        const testimonialId = req.params.id;
+
+        if (!ObjectId.isValid(testimonialId)) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid testimonial ID",
+          });
+        }
+
+        const result = await testimonialsCollection.deleteOne({
+          _id: new ObjectId(testimonialId),
+        });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).json({
+            success: false,
+            message: "Testimonial not found",
+          });
+        }
+
+        res.json({
+          success: true,
+          message: "Testimonial deleted successfully",
+        });
+      } catch (error) {
+        console.error("Error deleting testimonial:", error);
+        res.status(500).json({
+          success: false,
+          message: "Failed to delete testimonial",
+          error: error.message,
+        });
+      }
+    });
 
     // COURSES ENDPOINTS
 
-    // GET - Get all courses (basic info only)
-    // app.get("/courses", async (req, res) => {
-    //   try {
-    //     // Projection to return only essential fields
-    //     const projection = {
-    //       slug: 1,
-    //       title: 1,
-
-    //       fee: 1,
-    //       duration: 1,
-    //       session: 1,
-    //       minimum_age: 1,
-    //       _id: 0,
-    //     };
-
-    //     const courses = await coursesCollection
-    //       .find({}, { projection })
-    //       .toArray();
-
-    //     res.json({
-    //       success: true,
-    //       count: courses.length,
-    //       courses,
-    //     });
-    //   } catch (error) {
-    //     console.error("Error fetching courses:", error);
-    //     res.status(500).json({
-    //       success: false,
-    //       message: "Failed to fetch courses",
-    //     });
-    //   }
-    // });
     app.post("/courses", async (req, res) => {
       try {
         const {
@@ -173,6 +322,25 @@ async function run() {
         });
       }
     });
+
+    app.get("/courses/featured", async (req, res) => {
+      try {
+        const courses = await coursesCollection.find({}).limit(4).toArray();
+        res.status(200).json({
+          success: true,
+          courses,
+          message: "Featured courses fetched successfully",
+        });
+      } catch (error) {
+        console.error("Error fetching featured courses:", error);
+        res.status(500).json({
+          success: false,
+          message: "Failed to fetch featured courses",
+          error: error.message,
+        });
+      }
+    });
+
     // PUT - Update a course by slug
     app.put("/courses/:slug", async (req, res) => {
       try {
@@ -684,14 +852,37 @@ async function run() {
           slug,
           metaDescription,
           content,
+          excerpt,
           category,
           tags,
           author,
+          featuredImage,
+          readingTime,
+          isFeatured = false,
+          seoTitle,
+          seoKeywords,
         } = req.body;
 
         // Validate required fields
-        if (!title || !slug || !content || !category || !tags || !author) {
-          return res.status(400).json({ error: "All fields are required" });
+        if (
+          !title ||
+          !slug ||
+          !content ||
+          !category ||
+          !tags ||
+          !author ||
+          !excerpt ||
+          !featuredImage
+        ) {
+          return res
+            .status(400)
+            .json({ error: "All required fields are missing" });
+        }
+
+        // Check if slug already exists
+        const existingBlog = await blogCollection.findOne({ slug });
+        if (existingBlog) {
+          return res.status(400).json({ error: "Slug already exists" });
         }
 
         const publishDate = new Date();
@@ -700,12 +891,20 @@ async function run() {
           slug,
           metaDescription,
           content,
+          excerpt,
           category,
           tags: Array.isArray(tags)
             ? tags
             : tags.split(",").map((tag) => tag.trim()),
           publishDate,
           author,
+          featuredImage,
+          readingTime,
+          isFeatured,
+          seoTitle,
+          seoKeywords: Array.isArray(seoKeywords)
+            ? seoKeywords
+            : seoKeywords.split(",").map((keyword) => keyword.trim()),
           views: 0,
           updatedAt: null,
         });
@@ -721,14 +920,35 @@ async function run() {
     app.put("/blogs/:slug", async (req, res) => {
       try {
         const { slug } = req.params;
-        const { title, metaDescription, content, category, tags, author } =
-          req.body;
+        const {
+          title,
+          metaDescription,
+          content,
+          excerpt,
+          category,
+          tags,
+          author,
+          featuredImage,
+
+          readingTime,
+          isFeatured,
+          seoTitle,
+          seoKeywords,
+        } = req.body;
 
         // Validate required fields
-        if (!title || !content || !category || !tags || !author) {
+        if (
+          !title ||
+          !content ||
+          !category ||
+          !tags ||
+          !author ||
+          !excerpt ||
+          !featuredImage
+        ) {
           return res
             .status(400)
-            .json({ error: "All fields except slug are required" });
+            .json({ error: "All required fields are missing" });
         }
 
         const result = await blogCollection.updateOne(
@@ -738,11 +958,20 @@ async function run() {
               title,
               metaDescription,
               content,
+              excerpt,
               category,
               tags: Array.isArray(tags)
                 ? tags
                 : tags.split(",").map((tag) => tag.trim()),
               author,
+              featuredImage,
+
+              readingTime,
+              isFeatured,
+              seoTitle,
+              seoKeywords: Array.isArray(seoKeywords)
+                ? seoKeywords
+                : seoKeywords.split(",").map((keyword) => keyword.trim()),
               updatedAt: new Date(),
             },
           }
@@ -771,7 +1000,18 @@ async function run() {
         res.status(500).json({ error: error.message });
       }
     });
-
+    app.get("/blogs/featured", async (req, res) => {
+      try {
+        const blogs = await blogCollection
+          .find()
+          .sort({ publishDate: -1 })
+          .limit(3)
+          .toArray();
+        res.json(blogs);
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    });
     // Get single blog by slug
     app.get("/blogs/:slug", async (req, res) => {
       try {
@@ -790,35 +1030,6 @@ async function run() {
       }
     });
 
-    // Update blog
-    // app.put("/blogs/:slug", async (req, res) => {
-    //   try {
-    //     const { title, metaDescription, content, category, tags } = req.body;
-
-    //     const result = await blogCollection.updateOne(
-    //       { slug: req.params.slug },
-    //       {
-    //         $set: {
-    //           title,
-    //           metaDescription,
-    //           content,
-    //           category,
-    //           tags: tags.split(",").map((tag) => tag.trim()),
-    //           updatedAt: new Date(),
-    //         },
-    //       }
-    //     );
-
-    //     if (result.matchedCount === 0) {
-    //       return res.status(404).json({ message: "Blog not found" });
-    //     }
-
-    //     res.json(result);
-    //   } catch (error) {
-    //     res.status(500).json({ error: error.message });
-    //   }
-    // });
-
     // Delete blog
     app.delete("/blogs/:slug", async (req, res) => {
       try {
@@ -835,148 +1046,6 @@ async function run() {
     });
 
     //BLOG SECTION END
-
-    // app.post("/courses", async (req, res) => {
-    //   try {
-    //     const {
-    //       title,
-    //       slug,
-    //       fee,
-    //       duration,
-    //       session,
-    //       minimum_age,
-    //       assessment,
-    //       resultCertificate,
-    //       earnings,
-    //       siaLicenceFee,
-    //       additionalCharges,
-    //       entryRequirement,
-    //       teachingMethod,
-    //       content,
-    //       faq,
-    //     } = req.body;
-
-    //     // Optional: Basic validation
-    //     if (!title || !slug || !fee || !duration || !session || !minimum_age) {
-    //       return res.status(400).json({
-    //         success: false,
-    //         message: "Missing required fields",
-    //       });
-    //     }
-
-    //     const courseData = {
-    //       title,
-    //       slug,
-    //       fee,
-    //       duration,
-    //       session,
-    //       minimum_age,
-    //       assessment,
-    //       resultCertificate,
-    //       earnings,
-    //       siaLicenceFee,
-    //       additionalCharges,
-    //       entryRequirement,
-    //       teachingMethod,
-    //       content,
-    //       faq,
-    //       createdAt: new Date(),
-    //     };
-
-    //     const result = await coursesCollection.insertOne(courseData);
-
-    //     res.status(201).json({
-    //       success: true,
-    //       message: "Course created successfully",
-    //       insertedId: result.insertedId,
-    //     });
-    //   } catch (error) {
-    //     console.error("Error creating course:", error);
-    //     res.status(500).json({
-    //       success: false,
-    //       message: "Failed to create course",
-    //     });
-    //   }
-    // });
-
-    // app.post("/courses", async (req, res) => {
-    //   try {
-    //     const {
-    //       title,
-    //       slug,
-    //       icon,
-    //       bgColorClass,
-    //       fee,
-    //       duration,
-    //       session,
-    //       category,
-    //       minimum_age,
-    //       assessment,
-    //       resultCertificate,
-    //       earnings,
-    //       siaLicenceFee,
-    //       additionalCharges,
-    //       entryRequirement,
-    //       teachingMethod,
-    //       content,
-    //       faq,
-    //     } = req.body;
-
-    //     // Optional: Basic validation
-    //     if (
-    //       !title ||
-    //       !slug ||
-    //       !fee ||
-    //       !duration ||
-    //       !session ||
-    //       !minimum_age ||
-    //       !category ||
-    //       !bgColorClass
-    //     ) {
-    //       return res.status(400).json({
-    //         success: false,
-    //         message: "Missing required fields",
-    //       });
-    //     }
-
-    //     const courseData = {
-    //       title,
-    //       slug,
-    //       icon,
-    //       bgColorClass,
-    //       fee,
-    //       duration,
-    //       session,
-    //       category,
-    //       minimum_age,
-    //       assessment,
-    //       resultCertificate,
-    //       earnings,
-    //       siaLicenceFee,
-    //       additionalCharges,
-    //       entryRequirement,
-    //       teachingMethod,
-    //       content,
-    //       faq,
-    //       createdAt: new Date(),
-    //     };
-
-    //     const result = await coursesCollection.insertOne(courseData);
-
-    //     res.status(201).json({
-    //       success: true,
-    //       message: "Course created successfully",
-    //       insertedId: result.insertedId,
-    //     });
-    //   } catch (error) {
-    //     console.error("Error creating course:", error);
-    //     res.status(500).json({
-    //       success: false,
-    //       message: "Failed to create course",
-    //       error: error.message,
-    //     });
-    //   }
-    // });
 
     console.log("Successfully connected to MongoDB!");
   } finally {
